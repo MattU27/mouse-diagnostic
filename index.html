@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Esports Mouse Pro Diagnostic & Hardware Lab</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -574,7 +577,7 @@
 
     <header>
         <h1>⚡ Esports Mouse Pro Diagnostic Lab</h1>
-        <p class="subtitle">Hardware switch debouncing, micro-chatter, USB polling stability & encoder analyzer</p>
+        <p class="subtitle">Hardware switch debouncing, micro-chatter, USB polling stability & encoder analyzer <span style="background: #238636; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">v2.3 ROLLING ENGINE</span></p>
     </header>
 
     <!-- Navigation Tabs -->
@@ -1073,7 +1076,7 @@
         }
 
         /* -------------------------------------------------------------
-           TAB 2: POLLING RATE & JITTER LOGIC (SCREEN-WIDE + INFINITE LOCK)
+           TAB 2: POLLING RATE & JITTER LOGIC (TRUE HARDWARE ROLLING ENGINE)
         ------------------------------------------------------------- */
         const pollArena = document.getElementById('pollArena');
         const pollCanvas = document.getElementById('pollCanvas');
@@ -1087,14 +1090,20 @@
         const avgHzEl = document.getElementById('avgHz');
         const jitterMsEl = document.getElementById('jitterMs');
 
+        // Professional Hardware Rolling Frequency Window (Zowie / MouseRate Standard)
+        // Eliminates single-packet OS microframe bursts (5000Hz glitches) by measuring
+        // actual event delivery frequency across a sliding time window.
+        let rollingTimestamps = [];
+        const ROLLING_WINDOW_SIZE = 12; // 12-event sliding window (~12ms at 1000Hz)
         let lastEventTimestamp = 0;
-        let lastMouseMoveTime = 0;
+        let lastMoveActivityTime = 0;
         let pollIntervals = [];
         let peakHz = 0;
+        let avgSamples = [];
         let avgCalculatedHz = 0;
         let stdDevJitter = 0;
         let hzHistory = [];
-        let hzScale = 1250; // Default: 1000Hz View (scale ceiling 1250)
+        let hzScale = 1250; // Default: 1000Hz View
         let reticlePos = { x: 0, y: 0 };
         let hasReticle = false;
 
@@ -1134,8 +1143,12 @@
         }
 
         function resetPollStats() {
+            rollingTimestamps = [];
+            lastEventTimestamp = 0;
+            lastMoveActivityTime = 0;
             peakHz = 0;
             avgCalculatedHz = 0;
+            avgSamples = [];
             stdDevJitter = 0;
             pollIntervals = [];
             hzHistory = [];
@@ -1147,7 +1160,7 @@
             showToast("Polling statistics reset");
         }
 
-        // Pointer Lock Implementation (Infinite Mousepad Mode)
+        // Pointer Lock (Infinite Mousepad Mode)
         function togglePointerLock(event) {
             if (event) event.stopPropagation();
             if (document.pointerLockElement === pollCanvas || document.pointerLockElement === pollArena) {
@@ -1161,24 +1174,19 @@
             try {
                 const promise = pollCanvas.requestPointerLock() || pollArena.requestPointerLock();
                 if (promise && promise.catch) {
-                    promise.catch(err => {
-                        console.warn("Pointer lock request error:", err);
-                        showToast("Click directly inside the box to lock cursor");
+                    promise.catch(() => {
+                        showToast("Click directly inside box to lock cursor");
                     });
                 }
-            } catch (err) {
-                console.warn("Pointer lock invocation error:", err);
-            }
+            } catch (err) {}
         }
 
-        // Clicking anywhere inside the arena acquires pointer lock
         pollArena.addEventListener('click', (e) => {
             if (document.pointerLockElement !== pollCanvas && document.pointerLockElement !== pollArena) {
                 requestLock();
             }
         });
 
-        // Pointer Lock State Changes
         document.addEventListener('pointerlockchange', () => {
             const isLocked = (document.pointerLockElement === pollCanvas || document.pointerLockElement === pollArena);
             if (isLocked) {
@@ -1205,10 +1213,6 @@
             }
         });
 
-        document.addEventListener('pointerlockerror', () => {
-            showToast("Pointer lock could not be acquired. Click inside box again.");
-        });
-
         function togglePollFullscreen() {
             if (!document.fullscreenElement) {
                 if (pollArena.requestFullscreen) pollArena.requestFullscreen();
@@ -1218,14 +1222,14 @@
             }
         }
 
-        // Screen-Wide Mousemove Tracking with Hardware Timing & Burst Filtering
+        // Screen-Wide Mousemove Tracking with Hardware Rolling Window Frequency Engine
         window.addEventListener('mousemove', (e) => {
             const pollingTabActive = document.getElementById('tab-polling') && document.getElementById('tab-polling').classList.contains('active');
             if (!pollingTabActive) return;
 
             const isLocked = (document.pointerLockElement === pollCanvas || document.pointerLockElement === pollArena);
 
-            // Update reticle inside canvas
+            // Reticle motion
             if (isLocked) {
                 reticlePos.x += (e.movementX || 0);
                 reticlePos.y += (e.movementY || 0);
@@ -1243,84 +1247,80 @@
                 }
             }
 
-            // Use browser hardware event timestamp (DOMHighResTimeStamp) to avoid JS main thread execution lag
             const now = e.timeStamp || performance.now();
-            lastMouseMoveTime = performance.now();
+            lastMoveActivityTime = performance.now();
 
+            // Track individual packet intervals for Jitter metric (Standard Deviation)
             if (lastEventTimestamp > 0) {
-                const delta = now - lastEventTimestamp;
-
-                // Physical limits & anti-coalescing thresholds based on selected view
-                // 1000Hz (1.0ms): min valid interval 0.60ms (max 1600Hz transient). Sub-0.6ms are OS queued bursts.
-                // 2000Hz (0.5ms): min valid interval 0.35ms (max 2800Hz transient).
-                // 4000Hz (0.25ms): min valid interval 0.18ms (max 5500Hz transient).
-                // 8000Hz (0.125ms): min valid interval 0.10ms (max 10000Hz transient).
-                let minAllowedDelta = 0.60;
-                let maxAllowedHz = 1250;
-
-                if (hzScale === 2500) {
-                    minAllowedDelta = 0.35;
-                    maxAllowedHz = 2500;
-                } else if (hzScale === 4500) {
-                    minAllowedDelta = 0.18;
-                    maxAllowedHz = 4500;
-                } else if (hzScale === 8500) {
-                    minAllowedDelta = 0.10;
-                    maxAllowedHz = 8500;
-                }
-
-                // Ignore pauses (> 60ms) and synthetic browser micro-bursts (< minAllowedDelta)
-                if (delta >= minAllowedDelta && delta < 60) {
-                    // Raw frequency calculation
-                    let rawHz = Math.round(1000 / delta);
-
-                    // Clamp to scale maximum to prevent graph flatlining / ceiling clipping
-                    let validHz = Math.min(rawHz, maxAllowedHz);
-
-                    pollIntervals.push(delta);
+                const singleDelta = now - lastEventTimestamp;
+                if (singleDelta > 0.1 && singleDelta < 50) {
+                    pollIntervals.push(singleDelta);
                     if (pollIntervals.length > 80) pollIntervals.shift();
 
-                    // Update Peak Hz strictly from validHz (100% consistent with graph)
-                    if (validHz > peakHz) {
-                        peakHz = validHz;
-                    }
-
-                    const sum = pollIntervals.reduce((a, b) => a + b, 0);
-                    const avgDelta = sum / pollIntervals.length;
-                    avgCalculatedHz = Math.round(1000 / avgDelta);
-
+                    const avgDelta = pollIntervals.reduce((a, b) => a + b, 0) / pollIntervals.length;
                     const variance = pollIntervals.reduce((a, b) => a + Math.pow(b - avgDelta, 2), 0) / pollIntervals.length;
                     stdDevJitter = Math.sqrt(variance);
+                    jitterMsEl.textContent = stdDevJitter.toFixed(2) + " ms";
+                }
+            }
+            lastEventTimestamp = now;
 
-                    currentHzEl.textContent = validHz + " Hz";
+            // Rolling Frequency Window Calculation
+            rollingTimestamps.push(now);
+            if (rollingTimestamps.length > ROLLING_WINDOW_SIZE) {
+                rollingTimestamps.shift();
+            }
+
+            // Need at least 6 packets in the window to calculate smooth frequency
+            if (rollingTimestamps.length >= 6) {
+                const timeSpan = rollingTimestamps[rollingTimestamps.length - 1] - rollingTimestamps[0];
+                const count = rollingTimestamps.length - 1;
+
+                // If mouse was paused (> 70ms between packets), reset window
+                if (timeSpan > 70 * count) {
+                    rollingTimestamps = [now];
+                    return;
+                }
+
+                if (timeSpan >= 2.0) {
+                    let calculatedHz = Math.round((count / timeSpan) * 1000);
+
+                    // Sanity clamping based on active view ceiling (prevents graph ceiling flatlining)
+                    const maxScaleLimit = (hzScale === 1250) ? 1250 : ((hzScale === 2500) ? 2500 : ((hzScale === 4500) ? 4500 : 8500));
+                    calculatedHz = Math.min(calculatedHz, maxScaleLimit);
+
+                    // Update Peak Hz strictly from calculatedHz (100% consistent with graph)
+                    if (calculatedHz > peakHz) {
+                        peakHz = calculatedHz;
+                    }
+
+                    // Average Hz over active swipe
+                    avgSamples.push(calculatedHz);
+                    if (avgSamples.length > 150) avgSamples.shift();
+                    avgCalculatedHz = Math.round(avgSamples.reduce((a, b) => a + b, 0) / avgSamples.length);
+
+                    currentHzEl.textContent = calculatedHz + " Hz";
                     peakHzEl.textContent = peakHz + " Hz";
                     avgHzEl.textContent = avgCalculatedHz + " Hz";
-                    jitterMsEl.textContent = stdDevJitter.toFixed(2) + " ms";
 
-                    // Push the EXACT SAME validHz to history (zero discrepancy between peak & graph)
-                    hzHistory.push(validHz);
+                    // Push identical sanitized value to waveform history
+                    hzHistory.push(calculatedHz);
                     if (hzHistory.length > 250) hzHistory.shift();
 
                     drawPollGraph();
-                    lastEventTimestamp = now;
-                } else if (delta >= 60) {
-                    // Mouse was paused; reset timestamp without logging a 0Hz spike
-                    lastEventTimestamp = now;
                 }
-                // If delta < minAllowedDelta (synthetic queue flush), ignore delta to prevent corrupting intervals
-            } else {
-                lastEventTimestamp = now;
             }
         });
 
         // Decay current Hz to 0 when mouse stops moving
         setInterval(() => {
-            if (lastMouseMoveTime > 0 && (performance.now() - lastMouseMoveTime) > 120) {
+            if (lastMoveActivityTime > 0 && (performance.now() - lastMoveActivityTime) > 100) {
                 if (currentHzEl && currentHzEl.textContent !== '0 Hz') {
                     currentHzEl.textContent = '0 Hz';
+                    rollingTimestamps = []; // reset window for next swipe
                 }
             }
-        }, 100);
+        }, 80);
 
         function drawPollGraph() {
             if (!pollCanvas || pollCanvas.width === 0) return;
@@ -1329,7 +1329,7 @@
 
             // Chart area padding (breathing room from canvas edges)
             const topPad = 32;
-            const botPad = 20;
+            const botPad = 24;
             const chartHeight = pollCanvas.height - topPad - botPad;
 
             // Watermark
