@@ -23,7 +23,8 @@
             margin-bottom: 20px;
             position: relative;
             width: 100%;
-            max-width: 900px;
+            max-width: 1200px;
+            transition: max-width 0.2s ease;
         }
         h1 {
             color: #58a6ff;
@@ -50,7 +51,7 @@
             border-radius: 10px;
             border: 1px solid #30363d;
             margin-bottom: 22px;
-            max-width: 900px;
+            max-width: 1200px;
             width: 100%;
             justify-content: center;
             flex-wrap: wrap;
@@ -96,7 +97,8 @@
         /* Container */
         .main-container {
             width: 100%;
-            max-width: 900px;
+            max-width: 1200px;
+            transition: max-width 0.2s ease;
         }
 
         .tab-pane {
@@ -306,30 +308,58 @@
             height: 280px;
         }
         .canvas-container.poll-container {
-            height: 420px;
+            height: 520px;
             cursor: crosshair;
+            background: #0d1117;
+            border: 2px solid #30363d;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .canvas-container.poll-container:hover {
+            border-color: #58a6ff88;
+        }
+        .canvas-container.poll-container.locked {
+            border-color: #2ea043;
+            box-shadow: 0 0 25px rgba(46, 160, 67, 0.35);
+        }
+        .canvas-container.poll-container:fullscreen {
+            width: 100vw;
+            height: 100vh;
+            border-radius: 0;
+            border: none;
+            padding: 0;
+            background: #0b0e14;
         }
         .pointer-lock-hint {
             position: absolute;
-            top: 12px;
-            right: 12px;
-            background: #161b22ee;
-            backdrop-filter: blur(4px);
+            top: 14px;
+            right: 14px;
+            background: #161b22f0;
+            backdrop-filter: blur(6px);
             border: 1px solid #30363d;
-            padding: 6px 14px;
-            border-radius: 6px;
-            font-size: 11px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 12px;
             color: #58a6ff;
-            pointer-events: none;
             z-index: 10;
             display: flex;
             align-items: center;
-            gap: 6px;
-            border-radius: 8px;
-            border: 1px solid #30363d;
-            background: #11141a;
-            overflow: hidden;
-            margin-bottom: 16px;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+        .pointer-lock-hint:hover {
+            background: #21262d;
+            border-color: #58a6ff;
+            transform: translateY(-1px);
+        }
+        .pointer-lock-hint.locked {
+            color: #3fb950;
+            border-color: #2ea043;
+            background: #162a1df0;
+            box-shadow: 0 0 12px rgba(46, 160, 67, 0.4);
         }
         canvas {
             display: block;
@@ -652,17 +682,24 @@
                 </div>
             </div>
 
-            <div class="canvas-container poll-container" id="pollArena">
-                <div class="pointer-lock-hint" id="pollHint">🔒 Click inside to lock cursor (Infinite Mousepad Mode) • Press [ESC] to exit</div>
+            <div class="canvas-container poll-container" id="pollArena" title="Click anywhere inside to lock cursor in Infinite Mousepad Mode">
+                <div class="pointer-lock-hint" id="pollHint" onclick="togglePointerLock(event)">
+                    <span id="pollHintIcon">🔒</span>
+                    <span id="pollHintText">Click inside to lock cursor (Infinite Mousepad Mode) • Press [ESC] to unlock</span>
+                </div>
                 <canvas id="pollCanvas"></canvas>
             </div>
+
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                 <p style="font-size: 12px; color: #8b949e;">
-                    💡 <strong>Pro Tip:</strong> Click inside the canvas to lock the cursor so you can spin continuously on your mousepad without hitting screen edges!
+                    💡 <strong>Screen-Wide Tracking Active:</strong> Move your mouse anywhere across your screen or lock the cursor to swipe continuously without hitting screen borders!
                 </p>
-                <div style="display: flex; gap: 8px;">
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="btn-action" id="btnLockCursor" onclick="togglePointerLock(event)">🔒 Lock Cursor</button>
+                    <button class="btn-action" id="btnFullscreenPoll" onclick="togglePollFullscreen()">⛶ Fullscreen Arena</button>
                     <button class="btn-action" id="btnScale1k" style="background: #1f6feb; color: #fff;" onclick="setHzScale(1250)">1000Hz View</button>
                     <button class="btn-action" id="btnScale4k" onclick="setHzScale(4500)">4000Hz View</button>
+                    <button class="btn-action" id="btnScale8k" onclick="setHzScale(8500)">8000Hz View</button>
                     <button class="btn-action" onclick="resetPollStats()">Reset Stats</button>
                 </div>
             </div>
@@ -862,8 +899,8 @@
                 }
             });
 
-            if (tabId === 'tab-polling') resizePollCanvas();
-            if (tabId === 'tab-hold') resizeHoldCanvas();
+            if (tabId === 'tab-polling') setTimeout(resizePollCanvas, 30);
+            if (tabId === 'tab-hold') setTimeout(resizeHoldCanvas, 30);
             if (tabId === 'tab-report') updateReportSheet();
         }
 
@@ -1035,10 +1072,15 @@
         }
 
         /* -------------------------------------------------------------
-           TAB 2: POLLING RATE & JITTER LOGIC
+           TAB 2: POLLING RATE & JITTER LOGIC (SCREEN-WIDE + INFINITE LOCK)
         ------------------------------------------------------------- */
+        const pollArena = document.getElementById('pollArena');
         const pollCanvas = document.getElementById('pollCanvas');
         const pollCtx = pollCanvas.getContext('2d');
+        const pollHint = document.getElementById('pollHint');
+        const pollHintIcon = document.getElementById('pollHintIcon');
+        const pollHintText = document.getElementById('pollHintText');
+        const btnLockCursor = document.getElementById('btnLockCursor');
         const currentHzEl = document.getElementById('currentHz');
         const peakHzEl = document.getElementById('peakHz');
         const avgHzEl = document.getElementById('avgHz');
@@ -1050,26 +1092,178 @@
         let avgCalculatedHz = 0;
         let stdDevJitter = 0;
         let hzHistory = [];
+        let hzScale = 1250;
+        let reticlePos = { x: 0, y: 0 };
+        let hasReticle = false;
 
         function resizePollCanvas() {
+            if (!pollCanvas || !pollCanvas.parentElement) return;
             pollCanvas.width = pollCanvas.parentElement.clientWidth;
             pollCanvas.height = pollCanvas.parentElement.clientHeight;
+            if (!hasReticle) {
+                reticlePos.x = pollCanvas.width / 2;
+                reticlePos.y = pollCanvas.height / 2;
+            }
+            drawPollGraph();
         }
+
         window.addEventListener('resize', () => {
             resizePollCanvas();
             resizeHoldCanvas();
         });
 
-        document.getElementById('pollArena').addEventListener('mousemove', (e) => {
+        document.addEventListener('fullscreenchange', () => {
+            setTimeout(resizePollCanvas, 100);
+        });
+
+        function setHzScale(scale) {
+            hzScale = scale;
+            const b1 = document.getElementById('btnScale1k');
+            const b4 = document.getElementById('btnScale4k');
+            const b8 = document.getElementById('btnScale8k');
+            if (b1) {
+                b1.style.background = scale === 1250 ? '#1f6feb' : '#21262d';
+                b1.style.color = scale === 1250 ? '#fff' : '#c9d1d9';
+            }
+            if (b4) {
+                b4.style.background = scale === 4500 ? '#1f6feb' : '#21262d';
+                b4.style.color = scale === 4500 ? '#fff' : '#c9d1d9';
+            }
+            if (b8) {
+                b8.style.background = scale === 8500 ? '#1f6feb' : '#21262d';
+                b8.style.color = scale === 8500 ? '#fff' : '#c9d1d9';
+            }
+            drawPollGraph();
+        }
+
+        function resetPollStats() {
+            peakHz = 0;
+            avgCalculatedHz = 0;
+            stdDevJitter = 0;
+            pollIntervals = [];
+            hzHistory = [];
+            currentHzEl.textContent = '0 Hz';
+            peakHzEl.textContent = '0 Hz';
+            avgHzEl.textContent = '0 Hz';
+            jitterMsEl.textContent = '0.00 ms';
+            drawPollGraph();
+            showToast("Polling statistics reset");
+        }
+
+        // Pointer Lock Implementation (Infinite Mousepad Mode)
+        function togglePointerLock(event) {
+            if (event) event.stopPropagation();
+            if (document.pointerLockElement === pollCanvas || document.pointerLockElement === pollArena) {
+                document.exitPointerLock();
+            } else {
+                requestLock();
+            }
+        }
+
+        function requestLock() {
+            try {
+                const promise = pollCanvas.requestPointerLock() || pollArena.requestPointerLock();
+                if (promise && promise.catch) {
+                    promise.catch(err => {
+                        console.warn("Pointer lock request error:", err);
+                        showToast("Click directly inside the box to lock cursor");
+                    });
+                }
+            } catch (err) {
+                console.warn("Pointer lock invocation error:", err);
+            }
+        }
+
+        // Clicking anywhere inside the arena acquires pointer lock
+        pollArena.addEventListener('click', (e) => {
+            if (document.pointerLockElement !== pollCanvas && document.pointerLockElement !== pollArena) {
+                requestLock();
+            }
+        });
+
+        // Pointer Lock State Changes
+        document.addEventListener('pointerlockchange', () => {
+            const isLocked = (document.pointerLockElement === pollCanvas || document.pointerLockElement === pollArena);
+            if (isLocked) {
+                pollArena.classList.add('locked');
+                pollHint.classList.add('locked');
+                pollHintIcon.textContent = "🟢";
+                pollHintText.textContent = "INFINITE MOUSEPAD ACTIVE • Cursor locked, swipe freely! Press [ESC] to unlock";
+                if (btnLockCursor) {
+                    btnLockCursor.textContent = "🔓 Unlock Cursor [ESC]";
+                    btnLockCursor.style.background = "#238636";
+                    btnLockCursor.style.color = "#fff";
+                }
+                showToast("Infinite Mousepad Active! Press ESC anytime to exit");
+            } else {
+                pollArena.classList.remove('locked');
+                pollHint.classList.remove('locked');
+                pollHintIcon.textContent = "🔒";
+                pollHintText.textContent = "Click inside to lock cursor (Infinite Mousepad Mode) • Press [ESC] to unlock";
+                if (btnLockCursor) {
+                    btnLockCursor.textContent = "🔒 Lock Cursor";
+                    btnLockCursor.style.background = "#21262d";
+                    btnLockCursor.style.color = "#c9d1d9";
+                }
+            }
+        });
+
+        document.addEventListener('pointerlockerror', () => {
+            showToast("Pointer lock could not be acquired. Click inside box again.");
+        });
+
+        function togglePollFullscreen() {
+            if (!document.fullscreenElement) {
+                if (pollArena.requestFullscreen) pollArena.requestFullscreen();
+                else if (pollArena.webkitRequestFullscreen) pollArena.webkitRequestFullscreen();
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+            }
+        }
+
+        // Screen-Wide Mousemove Tracking
+        window.addEventListener('mousemove', (e) => {
+            const pollingTabActive = document.getElementById('tab-polling') && document.getElementById('tab-polling').classList.contains('active');
+            if (!pollingTabActive) return;
+
+            const isLocked = (document.pointerLockElement === pollCanvas || document.pointerLockElement === pollArena);
+
+            // Update reticle inside canvas
+            if (isLocked) {
+                reticlePos.x += (e.movementX || 0);
+                reticlePos.y += (e.movementY || 0);
+                if (reticlePos.x < 0) reticlePos.x = pollCanvas.width;
+                if (reticlePos.x > pollCanvas.width) reticlePos.x = 0;
+                if (reticlePos.y < 0) reticlePos.y = pollCanvas.height;
+                if (reticlePos.y > pollCanvas.height) reticlePos.y = 0;
+                hasReticle = true;
+            } else {
+                const rect = pollCanvas.getBoundingClientRect();
+                if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                    reticlePos.x = e.clientX - rect.left;
+                    reticlePos.y = e.clientY - rect.top;
+                    hasReticle = true;
+                }
+            }
+
             const now = performance.now();
             if (lastMouseMoveTime > 0) {
                 const delta = now - lastMouseMoveTime;
-                if (delta > 0.1 && delta < 50) {
+                // Filter out unrealistic pause deltas (> 60ms) and duplicate 0 timestamps
+                if (delta > 0.05 && delta < 60) {
                     const instantHz = Math.round(1000 / delta);
                     pollIntervals.push(delta);
                     if (pollIntervals.length > 80) pollIntervals.shift();
 
-                    if (instantHz > peakHz && instantHz < 9000) peakHz = instantHz;
+                    if (instantHz > peakHz && instantHz < 10000) {
+                        peakHz = instantHz;
+                        // Auto-adjust scale if mouse exceeds current scale
+                        if (peakHz > 1200 && hzScale === 1250) {
+                            setHzScale(4500);
+                        } else if (peakHz > 4200 && hzScale === 4500) {
+                            setHzScale(8500);
+                        }
+                    }
 
                     const sum = pollIntervals.reduce((a, b) => a + b, 0);
                     const avgDelta = sum / pollIntervals.length;
@@ -1078,13 +1272,13 @@
                     const variance = pollIntervals.reduce((a, b) => a + Math.pow(b - avgDelta, 2), 0) / pollIntervals.length;
                     stdDevJitter = Math.sqrt(variance);
 
-                    currentHzEl.textContent = `${instantHz} Hz`;
-                    peakHzEl.textContent = `${peakHz} Hz`;
-                    avgHzEl.textContent = `${avgCalculatedHz} Hz`;
-                    jitterMsEl.textContent = `${stdDevJitter.toFixed(2)} ms`;
+                    currentHzEl.textContent = instantHz + " Hz";
+                    peakHzEl.textContent = peakHz + " Hz";
+                    avgHzEl.textContent = avgCalculatedHz + " Hz";
+                    jitterMsEl.textContent = stdDevJitter.toFixed(2) + " ms";
 
                     hzHistory.push(instantHz);
-                    if (hzHistory.length > 200) hzHistory.shift();
+                    if (hzHistory.length > 250) hzHistory.shift();
 
                     drawPollGraph();
                 }
@@ -1093,32 +1287,61 @@
         });
 
         function drawPollGraph() {
-            pollCtx.fillStyle = '#11141a';
+            if (!pollCanvas || pollCanvas.width === 0) return;
+            pollCtx.fillStyle = '#0d1117';
             pollCtx.fillRect(0, 0, pollCanvas.width, pollCanvas.height);
 
-            pollCtx.strokeStyle = '#21262d';
-            pollCtx.lineWidth = 1;
-            [1000, 2000, 4000].forEach(target => {
-                const y = pollCanvas.height - (target / 4500) * pollCanvas.height;
+            // Watermark
+            pollCtx.fillStyle = '#161b22';
+            pollCtx.font = 'bold 72px monospace';
+            pollCtx.textAlign = 'center';
+            pollCtx.textBaseline = 'middle';
+            pollCtx.fillText((hzScale > 5000 ? '8000Hz' : (hzScale > 2000 ? '4000Hz' : '1000Hz')) + ' ARENA', pollCanvas.width / 2, pollCanvas.height / 2);
+
+            // Target grid guidelines based on active scale
+            let targets = [125, 250, 500, 1000];
+            if (hzScale === 4500) targets = [500, 1000, 2000, 4000];
+            else if (hzScale === 8500) targets = [1000, 2000, 4000, 8000];
+
+            pollCtx.textAlign = 'left';
+            pollCtx.textBaseline = 'alphabetic';
+
+            targets.forEach(target => {
+                const y = pollCanvas.height - (target / hzScale) * pollCanvas.height;
+                pollCtx.strokeStyle = target === 1000 || target === 4000 || target === 8000 ? '#30363d' : '#1e242c';
+                pollCtx.lineWidth = target === 1000 || target === 4000 || target === 8000 ? 1.5 : 1;
                 pollCtx.beginPath();
                 pollCtx.moveTo(0, y);
                 pollCtx.lineTo(pollCanvas.width, y);
                 pollCtx.stroke();
-                pollCtx.fillStyle = '#484f58';
-                pollCtx.font = '10px monospace';
-                pollCtx.fillText(`${target}Hz`, 10, y - 4);
+
+                pollCtx.fillStyle = target === 1000 ? '#58a6ff' : '#8b949e';
+                pollCtx.font = '11px monospace';
+                pollCtx.fillText(target + " Hz", 14, y - 5);
             });
+
+            // Draw Real-time Reticle Dot
+            if (hasReticle) {
+                pollCtx.beginPath();
+                pollCtx.arc(reticlePos.x, reticlePos.y, 5, 0, Math.PI * 2);
+                pollCtx.fillStyle = '#58a6ff';
+                pollCtx.shadowColor = '#58a6ff';
+                pollCtx.shadowBlur = 10;
+                pollCtx.fill();
+                pollCtx.shadowBlur = 0; // reset
+            }
 
             if (hzHistory.length < 2) return;
 
+            // Draw Frequency Waveform
             pollCtx.strokeStyle = '#58a6ff';
-            pollCtx.lineWidth = 2;
+            pollCtx.lineWidth = 2.5;
             pollCtx.beginPath();
 
-            const step = pollCanvas.width / 200;
+            const step = pollCanvas.width / 250;
             hzHistory.forEach((hz, i) => {
                 const x = i * step;
-                const y = pollCanvas.height - (Math.min(hz, 4500) / 4500) * pollCanvas.height;
+                const y = pollCanvas.height - (Math.min(hz, hzScale) / hzScale) * pollCanvas.height;
                 if (i === 0) pollCtx.moveTo(x, y);
                 else pollCtx.lineTo(x, y);
             });
