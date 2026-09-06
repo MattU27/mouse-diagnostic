@@ -698,6 +698,7 @@
                     <button class="btn-action" id="btnLockCursor" onclick="togglePointerLock(event)">🔒 Lock Cursor</button>
                     <button class="btn-action" id="btnFullscreenPoll" onclick="togglePollFullscreen()">⛶ Fullscreen Arena</button>
                     <button class="btn-action" id="btnScale1k" style="background: #1f6feb; color: #fff;" onclick="setHzScale(1250)">1000Hz View</button>
+                    <button class="btn-action" id="btnScale2k" onclick="setHzScale(2500)">2000Hz View</button>
                     <button class="btn-action" id="btnScale4k" onclick="setHzScale(4500)">4000Hz View</button>
                     <button class="btn-action" id="btnScale8k" onclick="setHzScale(8500)">8000Hz View</button>
                     <button class="btn-action" onclick="resetPollStats()">Reset Stats</button>
@@ -1086,13 +1087,14 @@
         const avgHzEl = document.getElementById('avgHz');
         const jitterMsEl = document.getElementById('jitterMs');
 
+        let lastEventTimestamp = 0;
         let lastMouseMoveTime = 0;
         let pollIntervals = [];
         let peakHz = 0;
         let avgCalculatedHz = 0;
         let stdDevJitter = 0;
         let hzHistory = [];
-        let hzScale = 1250;
+        let hzScale = 1250; // Default: 1000Hz View (scale ceiling 1250)
         let reticlePos = { x: 0, y: 0 };
         let hasReticle = false;
 
@@ -1118,21 +1120,16 @@
 
         function setHzScale(scale) {
             hzScale = scale;
-            const b1 = document.getElementById('btnScale1k');
-            const b4 = document.getElementById('btnScale4k');
-            const b8 = document.getElementById('btnScale8k');
-            if (b1) {
-                b1.style.background = scale === 1250 ? '#1f6feb' : '#21262d';
-                b1.style.color = scale === 1250 ? '#fff' : '#c9d1d9';
-            }
-            if (b4) {
-                b4.style.background = scale === 4500 ? '#1f6feb' : '#21262d';
-                b4.style.color = scale === 4500 ? '#fff' : '#c9d1d9';
-            }
-            if (b8) {
-                b8.style.background = scale === 8500 ? '#1f6feb' : '#21262d';
-                b8.style.color = scale === 8500 ? '#fff' : '#c9d1d9';
-            }
+            ['btnScale1k', 'btnScale2k', 'btnScale4k', 'btnScale8k'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                const match = (scale === 1250 && id === 'btnScale1k') ||
+                              (scale === 2500 && id === 'btnScale2k') ||
+                              (scale === 4500 && id === 'btnScale4k') ||
+                              (scale === 8500 && id === 'btnScale8k');
+                btn.style.background = match ? '#1f6feb' : '#21262d';
+                btn.style.color = match ? '#fff' : '#c9d1d9';
+            });
             drawPollGraph();
         }
 
@@ -1221,7 +1218,7 @@
             }
         }
 
-        // Screen-Wide Mousemove Tracking
+        // Screen-Wide Mousemove Tracking with Hardware Timing & Burst Filtering
         window.addEventListener('mousemove', (e) => {
             const pollingTabActive = document.getElementById('tab-polling') && document.getElementById('tab-polling').classList.contains('active');
             if (!pollingTabActive) return;
@@ -1246,23 +1243,46 @@
                 }
             }
 
-            const now = performance.now();
-            if (lastMouseMoveTime > 0) {
-                const delta = now - lastMouseMoveTime;
-                // Filter out unrealistic pause deltas (> 60ms) and duplicate 0 timestamps
-                if (delta > 0.05 && delta < 60) {
-                    const instantHz = Math.round(1000 / delta);
+            // Use browser hardware event timestamp (DOMHighResTimeStamp) to avoid JS main thread execution lag
+            const now = e.timeStamp || performance.now();
+            lastMouseMoveTime = performance.now();
+
+            if (lastEventTimestamp > 0) {
+                const delta = now - lastEventTimestamp;
+
+                // Physical limits & anti-coalescing thresholds based on selected view
+                // 1000Hz (1.0ms): min valid interval 0.60ms (max 1600Hz transient). Sub-0.6ms are OS queued bursts.
+                // 2000Hz (0.5ms): min valid interval 0.35ms (max 2800Hz transient).
+                // 4000Hz (0.25ms): min valid interval 0.18ms (max 5500Hz transient).
+                // 8000Hz (0.125ms): min valid interval 0.10ms (max 10000Hz transient).
+                let minAllowedDelta = 0.60;
+                let maxAllowedHz = 1250;
+
+                if (hzScale === 2500) {
+                    minAllowedDelta = 0.35;
+                    maxAllowedHz = 2500;
+                } else if (hzScale === 4500) {
+                    minAllowedDelta = 0.18;
+                    maxAllowedHz = 4500;
+                } else if (hzScale === 8500) {
+                    minAllowedDelta = 0.10;
+                    maxAllowedHz = 8500;
+                }
+
+                // Ignore pauses (> 60ms) and synthetic browser micro-bursts (< minAllowedDelta)
+                if (delta >= minAllowedDelta && delta < 60) {
+                    // Raw frequency calculation
+                    let rawHz = Math.round(1000 / delta);
+
+                    // Clamp to scale maximum to prevent graph flatlining / ceiling clipping
+                    let validHz = Math.min(rawHz, maxAllowedHz);
+
                     pollIntervals.push(delta);
                     if (pollIntervals.length > 80) pollIntervals.shift();
 
-                    if (instantHz > peakHz && instantHz < 10000) {
-                        peakHz = instantHz;
-                        // Auto-adjust scale if mouse exceeds current scale
-                        if (peakHz > 1200 && hzScale === 1250) {
-                            setHzScale(4500);
-                        } else if (peakHz > 4200 && hzScale === 4500) {
-                            setHzScale(8500);
-                        }
+                    // Update Peak Hz strictly from validHz (100% consistent with graph)
+                    if (validHz > peakHz) {
+                        peakHz = validHz;
                     }
 
                     const sum = pollIntervals.reduce((a, b) => a + b, 0);
@@ -1272,50 +1292,74 @@
                     const variance = pollIntervals.reduce((a, b) => a + Math.pow(b - avgDelta, 2), 0) / pollIntervals.length;
                     stdDevJitter = Math.sqrt(variance);
 
-                    currentHzEl.textContent = instantHz + " Hz";
+                    currentHzEl.textContent = validHz + " Hz";
                     peakHzEl.textContent = peakHz + " Hz";
                     avgHzEl.textContent = avgCalculatedHz + " Hz";
                     jitterMsEl.textContent = stdDevJitter.toFixed(2) + " ms";
 
-                    hzHistory.push(instantHz);
+                    // Push the EXACT SAME validHz to history (zero discrepancy between peak & graph)
+                    hzHistory.push(validHz);
                     if (hzHistory.length > 250) hzHistory.shift();
 
                     drawPollGraph();
+                    lastEventTimestamp = now;
+                } else if (delta >= 60) {
+                    // Mouse was paused; reset timestamp without logging a 0Hz spike
+                    lastEventTimestamp = now;
+                }
+                // If delta < minAllowedDelta (synthetic queue flush), ignore delta to prevent corrupting intervals
+            } else {
+                lastEventTimestamp = now;
+            }
+        });
+
+        // Decay current Hz to 0 when mouse stops moving
+        setInterval(() => {
+            if (lastMouseMoveTime > 0 && (performance.now() - lastMouseMoveTime) > 120) {
+                if (currentHzEl && currentHzEl.textContent !== '0 Hz') {
+                    currentHzEl.textContent = '0 Hz';
                 }
             }
-            lastMouseMoveTime = now;
-        });
+        }, 100);
 
         function drawPollGraph() {
             if (!pollCanvas || pollCanvas.width === 0) return;
             pollCtx.fillStyle = '#0d1117';
             pollCtx.fillRect(0, 0, pollCanvas.width, pollCanvas.height);
 
+            // Chart area padding (breathing room from canvas edges)
+            const topPad = 32;
+            const botPad = 20;
+            const chartHeight = pollCanvas.height - topPad - botPad;
+
             // Watermark
             pollCtx.fillStyle = '#161b22';
             pollCtx.font = 'bold 72px monospace';
             pollCtx.textAlign = 'center';
             pollCtx.textBaseline = 'middle';
-            pollCtx.fillText((hzScale > 5000 ? '8000Hz' : (hzScale > 2000 ? '4000Hz' : '1000Hz')) + ' ARENA', pollCanvas.width / 2, pollCanvas.height / 2);
+            const tierLabel = hzScale > 5000 ? '8000Hz' : (hzScale > 3000 ? '4000Hz' : (hzScale > 1500 ? '2000Hz' : '1000Hz'));
+            pollCtx.fillText(tierLabel + ' ARENA', pollCanvas.width / 2, pollCanvas.height / 2);
 
             // Target grid guidelines based on active scale
             let targets = [125, 250, 500, 1000];
-            if (hzScale === 4500) targets = [500, 1000, 2000, 4000];
+            if (hzScale === 2500) targets = [500, 1000, 1500, 2000];
+            else if (hzScale === 4500) targets = [1000, 2000, 3000, 4000];
             else if (hzScale === 8500) targets = [1000, 2000, 4000, 8000];
 
             pollCtx.textAlign = 'left';
             pollCtx.textBaseline = 'alphabetic';
 
             targets.forEach(target => {
-                const y = pollCanvas.height - (target / hzScale) * pollCanvas.height;
-                pollCtx.strokeStyle = target === 1000 || target === 4000 || target === 8000 ? '#30363d' : '#1e242c';
-                pollCtx.lineWidth = target === 1000 || target === 4000 || target === 8000 ? 1.5 : 1;
+                const y = pollCanvas.height - botPad - (target / hzScale) * chartHeight;
+                const isPrimary = (target === 1000 || target === 2000 || target === 4000 || target === 8000);
+                pollCtx.strokeStyle = isPrimary ? '#30363d' : '#1e242c';
+                pollCtx.lineWidth = isPrimary ? 1.5 : 1;
                 pollCtx.beginPath();
                 pollCtx.moveTo(0, y);
                 pollCtx.lineTo(pollCanvas.width, y);
                 pollCtx.stroke();
 
-                pollCtx.fillStyle = target === 1000 ? '#58a6ff' : '#8b949e';
+                pollCtx.fillStyle = isPrimary ? '#58a6ff' : '#8b949e';
                 pollCtx.font = '11px monospace';
                 pollCtx.fillText(target + " Hz", 14, y - 5);
             });
@@ -1341,7 +1385,7 @@
             const step = pollCanvas.width / 250;
             hzHistory.forEach((hz, i) => {
                 const x = i * step;
-                const y = pollCanvas.height - (Math.min(hz, hzScale) / hzScale) * pollCanvas.height;
+                const y = pollCanvas.height - botPad - (Math.min(hz, hzScale) / hzScale) * chartHeight;
                 if (i === 0) pollCtx.moveTo(x, y);
                 else pollCtx.lineTo(x, y);
             });
