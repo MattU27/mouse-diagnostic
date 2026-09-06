@@ -304,6 +304,27 @@
             position: relative;
             width: 100%;
             height: 280px;
+        }
+        .canvas-container.poll-container {
+            height: 420px;
+            cursor: crosshair;
+        }
+        .pointer-lock-hint {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: #161b22ee;
+            backdrop-filter: blur(4px);
+            border: 1px solid #30363d;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 11px;
+            color: #58a6ff;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 6px;
             border-radius: 8px;
             border: 1px solid #30363d;
             background: #11141a;
@@ -631,12 +652,20 @@
                 </div>
             </div>
 
-            <div class="canvas-container" id="pollArena">
+            <div class="canvas-container poll-container" id="pollArena">
+                <div class="pointer-lock-hint" id="pollHint">🔒 Click inside to lock cursor (Infinite Mousepad Mode) • Press [ESC] to exit</div>
                 <canvas id="pollCanvas"></canvas>
             </div>
-            <p style="font-size: 12px; color: #8b949e; text-align: center; margin-bottom: 20px;">
-                💡 <strong>Instructions:</strong> Move your mouse in rapid, continuous circles inside the canvas box above to measure your true USB polling rate and stability.
-            </p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                <p style="font-size: 12px; color: #8b949e;">
+                    💡 <strong>Pro Tip:</strong> Click inside the canvas to lock the cursor so you can spin continuously on your mousepad without hitting screen edges!
+                </p>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-action" id="btnScale1k" style="background: #1f6feb; color: #fff;" onclick="setHzScale(1250)">1000Hz View</button>
+                    <button class="btn-action" id="btnScale4k" onclick="setHzScale(4500)">4000Hz View</button>
+                    <button class="btn-action" onclick="resetPollStats()">Reset Stats</button>
+                </div>
+            </div>
         </div>
 
         <!-- ================= TAB 3: HOLD / SPRAY DROP-OUT TEST ================= -->
