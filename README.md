@@ -4,6 +4,8 @@
 
 A browser-based tool for observing mouse clicks, holds, wheel direction, and movement events. It runs as a static page with no account or server.
 
+After a deployment, GitHub Pages can keep an older copy of the page in a browser cache for up to 10 minutes. If the live link still looks old, hard refresh the page or open it with a unique query string, for example `?refresh=20260928-1`.
+
 ## Guided repair verification
 
 1. Enter the mouse model and select a button.
