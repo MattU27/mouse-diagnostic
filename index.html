@@ -277,6 +277,22 @@
             background: #2ea043;
             box-shadow: 0 0 8px rgba(46, 160, 67, 0.4);
         }
+        .test-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 14px; }
+        .test-controls label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: #8b949e; }
+        .test-controls input, .test-controls select {
+            min-width: 130px; max-width: 220px; background: #0d1117; color: #f0f6fc;
+            border: 1px solid #30363d; border-radius: 6px; padding: 8px;
+        }
+        .test-note { color: #8b949e; font-size: 12px; line-height: 1.5; margin: 10px 0; }
+        .comparison-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+        .comparison-grid > div { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 14px; }
+        .comparison-grid h3 { color: #58a6ff; font-size: 14px; margin-bottom: 8px; }
+        .comparison-grid p { font-size: 12px; line-height: 1.6; white-space: pre-line; }
+        @media (max-width: 650px) {
+            .dashboard { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .comparison-grid, .report-grid { grid-template-columns: 1fr; }
+            .report-header, .report-row { flex-wrap: wrap; gap: 8px; }
+        }
 
         .data-table {
             width: 100%;
@@ -577,13 +593,14 @@
 
     <header>
         <h1>⚡ Esports Mouse Pro Diagnostic Lab</h1>
-        <p class="subtitle">Hardware switch debouncing, micro-chatter, USB polling stability & encoder analyzer <span style="background: #238636; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">v2.3 ROLLING ENGINE</span></p>
+        <p class="subtitle">Browser-based switch, hold, input event rate & scroll tests <span style="background: #238636; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">REPAIR VERIFICATION</span></p>
     </header>
 
     <!-- Navigation Tabs -->
     <div class="nav-tabs">
         <button class="tab-btn active" onclick="switchTab('tab-chatter')">🖱️ Switch Chatter</button>
-        <button class="tab-btn" onclick="switchTab('tab-polling')">⚡ Polling Rate (Hz)</button>
+        <button class="tab-btn" onclick="switchTab('tab-repair')">🔧 Repair Verification</button>
+        <button class="tab-btn" onclick="switchTab('tab-polling')">⚡ Input Event Rate (Hz)</button>
         <button class="tab-btn" onclick="switchTab('tab-hold')">🎯 Spray / Hold Test</button>
         <button class="tab-btn" onclick="switchTab('tab-wheel')">🔄 Scroll Wheel</button>
         <button class="tab-btn" onclick="switchTab('tab-cps')">⏱️ CPS Speed</button>
@@ -597,7 +614,7 @@
             
             <div class="interactive-arena" id="chatterArena">
                 <div class="arena-title" id="chatterArenaTitle">CLICK RAPIDLY INSIDE THIS BOX</div>
-                <div class="arena-desc">Detects switch bounce (< 50ms), hold-to-release duration, and contact health</div>
+                <div class="arena-desc">Shows browser click intervals. Rapid intentional clicks can also trigger a repeat warning.</div>
             </div>
 
             <div class="dashboard">
@@ -607,15 +624,15 @@
                 </div>
                 <div class="stat-card">
                     <div class="stat-val healthy" id="doubleClicks">0</div>
-                    <div class="stat-lbl">Double Clicks (&lt;50ms)</div>
+                    <div class="stat-lbl">Suspected Repeats (&lt;50ms)</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-val" id="lastInterval">0.0 ms</div>
                     <div class="stat-lbl">Interval (&Delta;t)</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-val healthy" id="healthScore">100%</div>
-                    <div class="stat-lbl">Switch Health</div>
+                    <div class="stat-val" id="healthScore">—</div>
+                    <div class="stat-lbl">Clean Event Share</div>
                 </div>
             </div>
 
@@ -664,6 +681,42 @@
             </div>
         </div>
 
+        <!-- ================= GUIDED REPAIR VERIFICATION ================= -->
+        <div id="tab-repair" class="tab-pane">
+            <div class="card-section">
+                <h2 style="font-size: 18px; color: #f0f6fc; margin-bottom: 10px;">Guided switch test</h2>
+                <p class="test-note">Choose one button, then make deliberate single presses inside the box. A quick second press is a suspected repeat, not proof of a faulty switch. Use the same settings before and after repair.</p>
+                <div class="test-controls">
+                    <label>Mouse model<input id="repairMouse" maxlength="80" placeholder="e.g. VXE R1 Pro"></label>
+                    <label>Button<select id="repairButton"><option value="0">Left</option><option value="2">Right</option><option value="1">Middle</option><option value="3">Back</option><option value="4">Forward</option></select></label>
+                    <label>Test phase<select id="repairPhase"><option value="before">Before repair</option><option value="after">After repair</option></select></label>
+                    <label>Target presses<select id="repairTarget"><option value="100">100</option><option value="500" selected>500</option><option value="1000">1,000</option></select></label>
+                    <label>Repeat threshold<select id="repairThreshold"><option value="20">20 ms</option><option value="30">30 ms</option><option value="40">40 ms</option><option value="50" selected>50 ms</option></select></label>
+                    <label>Replacement switch (optional)<input id="repairSwitch" maxlength="100" placeholder="e.g. HUANO Blue Shell Pink Dot"></label>
+                </div>
+                <button class="btn-action btn-green" id="repairStart" onclick="startRepairTest()">Start test</button>
+                <button class="btn-action" onclick="cancelRepairTest()">Cancel test</button>
+                <p id="repairStatus" class="test-note" role="status">No test started.</p>
+                <div class="interactive-arena" id="repairArena" style="height: 170px; margin-top: 12px;">
+                    <div class="arena-title" id="repairArenaTitle">START A GUIDED TEST</div>
+                    <div class="arena-desc">Only presses of the selected button count.</div>
+                </div>
+                <div class="dashboard" style="margin-bottom: 0;">
+                    <div class="stat-card"><div class="stat-val" id="repairProgress">0 / 500</div><div class="stat-lbl">Presses</div></div>
+                    <div class="stat-card"><div class="stat-val" id="repairRepeats">0</div><div class="stat-lbl">Suspected repeats</div></div>
+                    <div class="stat-card"><div class="stat-val" id="repairMinInterval">—</div><div class="stat-lbl">Shortest interval</div></div>
+                    <div class="stat-card"><div class="stat-val" id="repairResult">UNTESTED</div><div class="stat-lbl">Result</div></div>
+                </div>
+            </div>
+            <div class="card-section">
+                <div class="card-header"><h2 style="font-size: 16px;">Before / after comparison</h2><button class="btn-action" onclick="clearRepairResults()">Clear saved results</button></div>
+                <div class="comparison-grid"><div><h3>Before repair</h3><p id="repairBefore">No completed test saved.</p></div><div><h3>After repair</h3><p id="repairAfter">No completed test saved.</p></div></div>
+                <p id="repairComparison" class="test-note">Complete and save both phases to compare them.</p>
+                <button class="btn-action" id="repairExport" onclick="downloadRepairReport()" disabled>Download comparison (.txt)</button>
+                <p class="test-note">Completed results are stored in this browser only. Clearing site data removes them.</p>
+            </div>
+        </div>
+
         <!-- ================= TAB 2: POLLING RATE & JITTER ================= -->
         <div id="tab-polling" class="tab-pane">
             <div class="dashboard">
@@ -681,7 +734,7 @@
                 </div>
                 <div class="stat-card">
                     <div class="stat-val" id="jitterMs">0.00 ms</div>
-                    <div class="stat-lbl">Packet Jitter (&sigma;)</div>
+                    <div class="stat-lbl">Event Interval Variation (&sigma;)</div>
                 </div>
             </div>
 
@@ -695,7 +748,7 @@
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                 <p style="font-size: 12px; color: #8b949e;">
-                    💡 <strong>Screen-Wide Tracking Active:</strong> Move your mouse anywhere across your screen or lock the cursor to swipe continuously without hitting screen borders!
+                    💡 <strong>Browser event estimate:</strong> Move the mouse over this page or lock the cursor. Browser scheduling and event coalescing affect these values; this is not a raw USB polling measurement.
                 </p>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <button class="btn-action" id="btnLockCursor" onclick="togglePointerLock(event)">🔒 Lock Cursor</button>
@@ -722,19 +775,24 @@
                 </div>
                 <div class="stat-card">
                     <div class="stat-val healthy" id="holdDropCount">0</div>
-                    <div class="stat-lbl">Hold Drop Faults</div>
+                    <div class="stat-lbl">Early Releases</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-val" id="longestHold">0.00 s</div>
-                    <div class="stat-lbl">Longest Stable Hold</div>
+                    <div class="stat-lbl">Longest Observed Hold</div>
                 </div>
+            </div>
+            <div class="test-controls">
+                <label>Button<select id="holdButton"><option value="0">Left</option><option value="2">Right</option></select></label>
+                <button class="btn-action btn-green" onclick="startHoldTest()">Start 3 × 10-second test</button>
+                <span id="holdRoundStatus" class="test-note" role="status">UNTESTED</span>
             </div>
 
             <div class="canvas-container" style="height: 300px;">
                 <canvas id="holdCanvas"></canvas>
             </div>
             <p style="font-size: 12px; color: #8b949e; text-align: center; margin-bottom: 20px;">
-                🎯 <strong>Spray & Hold Test:</strong> Press and hold Left or Right Click, then draw smooth continuous squiggles. If your switch has loose leaf tension, it will drop contact and trigger a red <strong>HOLD DROP</strong> alert!
+                🎯 <strong>Guided hold test:</strong> Start the test, then hold the selected button inside the canvas for 10 seconds per round while moving. A release before the timer ends is recorded as an early release; the browser cannot tell whether it was intentional.
             </p>
         </div>
 
@@ -743,7 +801,7 @@
             <div class="dashboard">
                 <div class="stat-card">
                     <div class="stat-val" id="wheelTotal">0</div>
-                    <div class="stat-lbl">Total Notches</div>
+                    <div class="stat-lbl">Wheel Events</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-val" style="color: #3fb950;" id="wheelUpCount">0</div>
@@ -755,13 +813,18 @@
                 </div>
                 <div class="stat-card">
                     <div class="stat-val healthy" id="wheelGlitchCount">0</div>
-                    <div class="stat-lbl">Reverse Glitches</div>
+                    <div class="stat-lbl">Unexpected Directions</div>
                 </div>
+            </div>
+            <div class="test-controls">
+                <button class="btn-action" onclick="startWheelRound('up')">Guided: scroll up 30 events</button>
+                <button class="btn-action" onclick="startWheelRound('down')">Guided: scroll down 30 events</button>
+                <span id="wheelRoundStatus" class="test-note" role="status">UNTESTED — run both guided directions for a result.</span>
             </div>
 
             <div class="interactive-arena" id="wheelArena" style="height: 140px;">
                 <div class="arena-title" id="wheelTitle">SCROLL WHEEL HERE</div>
-                <div class="arena-desc">Quickly scroll up and down. Detects mechanical encoder reverse bouncing.</div>
+                <div class="arena-desc">During a guided round, scroll only in the selected direction. Wheel events are not physical notches.</div>
             </div>
 
             <div class="card-section">
@@ -801,74 +864,73 @@
             <div class="report-certificate" id="reportSheet">
                 <div class="report-header">
                     <div class="report-title-box">
-                        <h2>OFFICIAL HARDWARE INSPECTION CERTIFICATE</h2>
+                        <h2>Mouse diagnostic observation report</h2>
                         <p id="reportTimestamp">Generated on: [Timestamp]</p>
-                        <p style="color: #58a6ff; font-weight: 600; margin-top: 2px;">Device: VXE R1 Pro (PAW3395 / Nordic MCU)</p>
+                        <p id="reportDevice" style="color: #58a6ff; font-weight: 600; margin-top: 2px;">Device: not specified</p>
                     </div>
-                    <div class="badge-grade" id="reportGradeBadge">GRADE S+</div>
+                    <div class="badge-grade" id="reportGradeBadge">PARTIAL</div>
                 </div>
 
                 <div class="report-grid">
                     <!-- Switch Contact Health -->
                     <div class="report-box">
                         <div class="report-box-title">
-                            <span>1. Microswitch Contact Health</span>
-                            <span id="repSwitchVerdict" style="color: #3fb950;">PASS ✅</span>
+                            <span>1. Guided Switch Observation</span>
+                            <span id="repSwitchVerdict">UNTESTED</span>
                         </div>
-                        <div class="report-row"><span>Total Test Clicks:</span><span class="val" id="repTotalClicks">0</span></div>
-                        <div class="report-row"><span>Double-Click Faults (<50ms):</span><span class="val" id="repDoubleClicks">0</span></div>
-                        <div class="report-row"><span>Switch Health Score:</span><span class="val" id="repHealthScore">100%</span></div>
-                        <div class="report-row"><span>Button Distribution:</span><span class="val" id="repBtnDist">L:0 | R:0 | M:0</span></div>
-                        <div class="report-row"><span>Recommended Debounce:</span><span class="val">1ms – 4ms (Clean) / 8ms (Safe)</span></div>
+                        <div class="report-row"><span>Latest guided phase:</span><span class="val" id="repGuidedPhase">—</span></div>
+                        <div class="report-row"><span>Guided presses:</span><span class="val" id="repTotalClicks">0</span></div>
+                        <div class="report-row"><span>Suspected rapid repeats:</span><span class="val" id="repDoubleClicks">—</span></div>
+                        <div class="report-row"><span>Tested button:</span><span class="val" id="repBtnDist">—</span></div>
+                        <div class="report-row"><span>Before / after:</span><span class="val" id="repRepairComparison">Incomplete</span></div>
                     </div>
 
                     <!-- Hold / Spray Stability -->
                     <div class="report-box">
                         <div class="report-box-title">
                             <span>2. Spray / Hold Stability</span>
-                            <span id="repHoldVerdict" style="color: #3fb950;">PASS ✅</span>
+                            <span id="repHoldVerdict">UNTESTED</span>
                         </div>
-                        <div class="report-row"><span>Longest Sustained Hold:</span><span class="val" id="repLongestHold">0.00 s</span></div>
-                        <div class="report-row"><span>Mid-Spray Disconnections:</span><span class="val" id="repHoldDrops">0</span></div>
-                        <div class="report-row"><span>Spring Leaf Contact Tension:</span><span class="val" id="repTensionVerdict">Solid</span></div>
-                        <div class="report-row"><span>Contact Chatter During Hold:</span><span class="val">0.00%</span></div>
+                        <div class="report-row"><span>Longest Observed Hold:</span><span class="val" id="repLongestHold">0.00 s</span></div>
+                        <div class="report-row"><span>Early releases:</span><span class="val" id="repHoldDrops">—</span></div>
+                        <div class="report-row"><span>Guided rounds:</span><span class="val" id="repTensionVerdict">0 / 3</span></div>
                     </div>
 
-                    <!-- USB Polling Rate Telemetry -->
+                    <!-- Browser input event rate -->
                     <div class="report-box">
                         <div class="report-box-title">
-                            <span>3. 2.4GHz Polling Rate Telemetry</span>
-                            <span id="repPollVerdict" style="color: #3fb950;">PASS ✅</span>
+                            <span>3. Browser Input Event Rate</span>
+                            <span id="repPollVerdict">UNTESTED</span>
                         </div>
-                        <div class="report-row"><span>Peak Polling Frequency:</span><span class="val" id="repPeakHz">0 Hz</span></div>
+                        <div class="report-row"><span>Peak observed event rate:</span><span class="val" id="repPeakHz">—</span></div>
                         <div class="report-row"><span>Average Active Rate:</span><span class="val" id="repAvgHz">0 Hz</span></div>
-                        <div class="report-row"><span>Packet Jitter (&sigma;):</span><span class="val" id="repJitter">0.00 ms</span></div>
-                        <div class="report-row"><span>Wireless Dongle Stability:</span><span class="val" id="repDongleVerdict">Optimal</span></div>
+                        <div class="report-row"><span>Event interval variation (&sigma;):</span><span class="val" id="repJitter">—</span></div>
+                        <div class="report-row"><span>Measurement:</span><span class="val" id="repDongleVerdict">Browser events only</span></div>
                     </div>
 
                     <!-- Scroll Wheel Encoder -->
                     <div class="report-box">
                         <div class="report-box-title">
-                            <span>4. Wheel Encoder Integrity</span>
-                            <span id="repWheelVerdict" style="color: #3fb950;">PASS ✅</span>
+                            <span>4. Guided Wheel Direction</span>
+                            <span id="repWheelVerdict">UNTESTED</span>
                         </div>
-                        <div class="report-row"><span>Total Notches Rotated:</span><span class="val" id="repWheelTotal">0</span></div>
-                        <div class="report-row"><span>Scroll Balance (Up / Down):</span><span class="val" id="repWheelBalance">0 / 0</span></div>
-                        <div class="report-row"><span>Reverse Glitch Ticks:</span><span class="val" id="repWheelGlitches">0</span></div>
-                        <div class="report-row"><span>Mechanical Encoder Rating:</span><span class="val" id="repEncoderRating">Healthy</span></div>
+                        <div class="report-row"><span>Wheel events observed:</span><span class="val" id="repWheelTotal">0</span></div>
+                        <div class="report-row"><span>Guided rounds:</span><span class="val" id="repWheelBalance">0 / 2</span></div>
+                        <div class="report-row"><span>Unexpected directions:</span><span class="val" id="repWheelGlitches">—</span></div>
+                        <div class="report-row"><span>Interpretation:</span><span class="val" id="repEncoderRating">Incomplete</span></div>
                     </div>
                 </div>
 
                 <div style="background: #0d1117; border: 1px solid #21262d; border-radius: 8px; padding: 12px; font-size: 12px; line-height: 1.5;">
-                    <strong style="color: #58a6ff;">Engineering Summary:</strong>
-                    <span id="reportSummaryText">Telemetry indicates pristine switch performance with zero contact bounce anomalies. Hardware debounce filter is fully functional.</span>
+                    <strong style="color: #58a6ff;">Summary:</strong>
+                    <span id="reportSummaryText">No completed guided tests. Browser observations cannot establish hardware condition with certainty.</span>
                 </div>
             </div>
 
             <!-- Report Action Buttons -->
             <div class="report-actions">
                 <button class="btn-action btn-green" onclick="printReportPdf()">
-                    🖨️ Save as PDF / Print Certificate
+                    🖨️ Save as PDF / Print Report
                 </button>
                 <button class="btn-action" onclick="downloadTextReport()">
                     💾 Download Text Report (.txt)
@@ -885,7 +947,7 @@
     <div class="toast" id="toast">Report copied to clipboard!</div>
 
     <footer>
-        Esports Mouse Diagnostic Suite • Runs 100% Offline with Microsecond Hardware Timers
+        Mouse Diagnostic Suite • Browser observations are local to this device
     </footer>
 
     <!-- ================= JAVASCRIPT LOGIC ================= -->
@@ -932,7 +994,7 @@
 
         let totalClicks = 0;
         let doubleClicks = 0;
-        let lastDownTime = 0;
+        let lastDownTimeByButton = {};
         let pressTimes = {};
         let clickEvents = [];
         let counts = { left: 0, right: 0, mid: 0, side: 0 };
@@ -944,8 +1006,9 @@
             totalClicks++;
             pressTimes[e.button] = now;
 
-            const interval = lastDownTime === 0 ? 0 : (now - lastDownTime);
-            lastDownTime = now;
+            const previousDown = lastDownTimeByButton[e.button];
+            const interval = previousDown === undefined ? 0 : (now - previousDown);
+            lastDownTimeByButton[e.button] = now;
 
             let btnName = "Left Button";
             let svgEl = btnLeftSvg;
@@ -987,7 +1050,7 @@
 
             if (isDouble) {
                 chatterArena.classList.add('error-active');
-                chatterArenaTitle.textContent = `⚠️ DOUBLE-CLICK DETECTED (${interval.toFixed(1)} ms)`;
+                chatterArenaTitle.textContent = `⚠️ SUSPECTED REPEAT (${interval.toFixed(1)} ms)`;
                 chatterArenaTitle.style.color = '#f85149';
             } else {
                 chatterArena.classList.add('click-active');
@@ -1047,7 +1110,7 @@
                     <td style="font-family: monospace;">${e.hold}</td>
                     <td>
                         <span class="status-pill ${e.isDouble ? 'status-double' : 'status-clean'}">
-                            ${e.isDouble ? '⚠️ DOUBLE-CLICK (<50ms)' : '✅ CLEAN SIGNAL'}
+                            ${e.isDouble ? '⚠️ SUSPECTED REPEAT (<50ms)' : 'NO RAPID REPEAT'}
                         </span>
                     </td>
                 </tr>
@@ -1057,7 +1120,8 @@
         function resetChatter() {
             totalClicks = 0;
             doubleClicks = 0;
-            lastDownTime = 0;
+            lastDownTimeByButton = {};
+            pressTimes = {};
             clickEvents = [];
             counts = { left: 0, right: 0, mid: 0, side: 0 };
             cntLeftEl.textContent = '0';
@@ -1068,15 +1132,161 @@
             doubleClicksEl.textContent = '0';
             doubleClicksEl.className = 'stat-val healthy';
             lastIntervalEl.textContent = '0.0 ms';
-            healthScoreEl.textContent = '100%';
-            healthScoreEl.className = 'stat-val healthy';
+            healthScoreEl.textContent = '—';
+            healthScoreEl.className = 'stat-val';
             chatterArenaTitle.textContent = 'CLICK RAPIDLY INSIDE THIS BOX';
             chatterArenaTitle.style.color = '#f0f6fc';
             renderChatterLog();
         }
 
         /* -------------------------------------------------------------
-           TAB 2: POLLING RATE & JITTER LOGIC (TRUE HARDWARE ROLLING ENGINE)
+           GUIDED SWITCH TEST AND LOCAL REPAIR COMPARISON
+        ------------------------------------------------------------- */
+        const repairStorageKey = 'mouse-diagnostic-repair-v1';
+        const repairFields = ['repairMouse', 'repairButton', 'repairPhase', 'repairTarget', 'repairThreshold', 'repairSwitch'];
+        const repairButtonNames = { 0: 'Left', 1: 'Middle', 2: 'Right', 3: 'Back', 4: 'Forward' };
+        let repairRun = null;
+        let repairSnapshots = { before: null, after: null };
+
+        function isValidRepairSnapshot(value) {
+            return value && typeof value === 'object' && typeof value.mouse === 'string' &&
+                Number.isInteger(value.button) && repairButtonNames[value.button] &&
+                [100, 500, 1000].includes(value.target) && [20, 30, 40, 50].includes(value.threshold) &&
+                value.count === value.target && Number.isInteger(value.repeats) &&
+                value.repeats >= 0 && value.repeats < value.count &&
+                (value.minimum === null || (Number.isFinite(value.minimum) && value.minimum > 0)) &&
+                typeof value.date === 'string' && !Number.isNaN(Date.parse(value.date));
+        }
+
+        function loadRepairResults() {
+            try {
+                const stored = JSON.parse(localStorage.getItem(repairStorageKey) || '{}');
+                for (const phase of ['before', 'after']) {
+                    if (isValidRepairSnapshot(stored[phase])) repairSnapshots[phase] = stored[phase];
+                }
+            } catch (error) { /* Private browsing may block local storage. Tests still work in memory. */ }
+            renderRepairResults();
+        }
+
+        function saveRepairResults() {
+            try {
+                localStorage.setItem(repairStorageKey, JSON.stringify(repairSnapshots));
+            } catch (error) {
+                showToast('Result kept for this visit; browser storage is unavailable.');
+            }
+        }
+
+        function setRepairFieldsDisabled(disabled) {
+            repairFields.forEach(id => { document.getElementById(id).disabled = disabled; });
+            document.getElementById('repairStart').disabled = disabled;
+        }
+
+        function startRepairTest() {
+            const mouse = document.getElementById('repairMouse').value.trim();
+            if (!mouse) {
+                document.getElementById('repairStatus').textContent = 'Enter a mouse model before starting.';
+                document.getElementById('repairMouse').focus();
+                return;
+            }
+            repairRun = {
+                mouse, button: Number(document.getElementById('repairButton').value),
+                phase: document.getElementById('repairPhase').value,
+                target: Number(document.getElementById('repairTarget').value),
+                threshold: Number(document.getElementById('repairThreshold').value),
+                replacement: document.getElementById('repairSwitch').value.trim(),
+                count: 0, repeats: 0, minimum: null, previous: null
+            };
+            setRepairFieldsDisabled(true);
+            document.getElementById('repairProgress').textContent = `0 / ${repairRun.target}`;
+            document.getElementById('repairRepeats').textContent = '0';
+            document.getElementById('repairMinInterval').textContent = '—';
+            document.getElementById('repairResult').textContent = 'IN PROGRESS';
+            document.getElementById('repairArenaTitle').textContent = `PRESS ${repairButtonNames[repairRun.button].toUpperCase()} ONCE AT A TIME`;
+            document.getElementById('repairStatus').textContent = `Testing ${repairButtonNames[repairRun.button]} on ${repairRun.mouse}. Complete ${repairRun.target} deliberate presses.`;
+        }
+
+        function cancelRepairTest() {
+            if (!repairRun) return;
+            repairRun = null;
+            setRepairFieldsDisabled(false);
+            document.getElementById('repairResult').textContent = 'CANCELLED';
+            document.getElementById('repairStatus').textContent = 'Test cancelled. No result was saved.';
+            document.getElementById('repairArenaTitle').textContent = 'START A GUIDED TEST';
+        }
+
+        const repairArena = document.getElementById('repairArena');
+        repairArena.addEventListener('contextmenu', e => e.preventDefault());
+        repairArena.addEventListener('mousedown', e => {
+            if (!repairRun || e.button !== repairRun.button) return;
+            const now = performance.now();
+            const interval = repairRun.previous === null ? null : now - repairRun.previous;
+            repairRun.previous = now;
+            repairRun.count++;
+            if (interval !== null && interval > 0) {
+                repairRun.minimum = repairRun.minimum === null ? interval : Math.min(repairRun.minimum, interval);
+                if (interval < repairRun.threshold) repairRun.repeats++;
+            }
+            document.getElementById('repairProgress').textContent = `${repairRun.count} / ${repairRun.target}`;
+            document.getElementById('repairRepeats').textContent = repairRun.repeats;
+            document.getElementById('repairMinInterval').textContent = repairRun.minimum === null ? '—' : `${repairRun.minimum.toFixed(1)} ms`;
+            document.getElementById('repairArenaTitle').textContent = interval !== null && interval < repairRun.threshold ? 'SUSPECTED RAPID REPEAT' : 'PRESS RECORDED';
+            if (repairRun.count < repairRun.target) return;
+            const { previous, phase, ...result } = repairRun;
+            result.date = new Date().toISOString();
+            repairSnapshots[phase] = result;
+            repairRun = null;
+            setRepairFieldsDisabled(false);
+            saveRepairResults();
+            document.getElementById('repairResult').textContent = result.repeats ? 'INVESTIGATE' : 'NO REPEATS OBSERVED';
+            document.getElementById('repairStatus').textContent = `Completed ${result.target} presses. ${result.repeats} suspected rapid repeats. Result saved in this browser.`;
+            document.getElementById('repairArenaTitle').textContent = 'TEST COMPLETE';
+            renderRepairResults();
+        });
+
+        function repairSnapshotText(result) {
+            if (!result) return 'No completed test saved.';
+            return `${result.mouse} · ${repairButtonNames[result.button]} · ${new Date(result.date).toLocaleString()}\n` +
+                `${result.count} presses · ${result.repeats} suspected repeats (<${result.threshold} ms)\n` +
+                `Shortest interval: ${result.minimum === null ? 'n/a' : result.minimum.toFixed(1) + ' ms'}` +
+                (result.replacement ? `\nReplacement: ${result.replacement}` : '');
+        }
+
+        function repairResultsComparable() {
+            const before = repairSnapshots.before, after = repairSnapshots.after;
+            return before && after && before.mouse.toLowerCase() === after.mouse.toLowerCase() &&
+                before.button === after.button && before.target === after.target && before.threshold === after.threshold;
+        }
+
+        function renderRepairResults() {
+            document.getElementById('repairBefore').textContent = repairSnapshotText(repairSnapshots.before);
+            document.getElementById('repairAfter').textContent = repairSnapshotText(repairSnapshots.after);
+            const comparison = document.getElementById('repairComparison');
+            if (repairResultsComparable()) {
+                const difference = repairSnapshots.before.repeats - repairSnapshots.after.repeats;
+                comparison.textContent = `After repair: ${difference === 0 ? 'no change in' : `${Math.abs(difference)} ${difference > 0 ? 'fewer' : 'more'}`} suspected repeats. This compares observed browser events under matching test settings; it does not guarantee switch lifetime.`;
+            } else if (repairSnapshots.before && repairSnapshots.after) {
+                comparison.textContent = 'Results have different mouse, button, target, or threshold settings. Repeat one phase with matching settings to compare.';
+            } else {
+                comparison.textContent = 'Complete and save both phases to compare them.';
+            }
+            document.getElementById('repairExport').disabled = !repairResultsComparable();
+        }
+
+        function clearRepairResults() {
+            repairSnapshots = { before: null, after: null };
+            try { localStorage.removeItem(repairStorageKey); } catch (error) { /* In-memory results are cleared. */ }
+            renderRepairResults();
+            showToast('Saved repair results cleared.');
+        }
+
+        function downloadRepairReport() {
+            if (!repairResultsComparable()) return;
+            const text = `MOUSE DIAGNOSTIC — REPAIR COMPARISON\n\nBEFORE REPAIR\n${repairSnapshotText(repairSnapshots.before)}\n\nAFTER REPAIR\n${repairSnapshotText(repairSnapshots.after)}\n\n${document.getElementById('repairComparison').textContent}\n\nRapid repeat events are suspected, not proof of a defective switch. No observed repeats does not guarantee future reliability.\n`;
+            downloadTextFile(text, 'mouse-repair-comparison.txt');
+        }
+
+        /* -------------------------------------------------------------
+           TAB 2: BROWSER INPUT EVENT RATE
         ------------------------------------------------------------- */
         const pollArena = document.getElementById('pollArena');
         const pollCanvas = document.getElementById('pollCanvas');
@@ -1090,9 +1300,7 @@
         const avgHzEl = document.getElementById('avgHz');
         const jitterMsEl = document.getElementById('jitterMs');
 
-        // Professional Hardware Rolling Frequency Window (Zowie / MouseRate Standard)
-        // Eliminates single-packet OS microframe bursts (5000Hz glitches) by measuring
-        // actual event delivery frequency across a sliding time window.
+        // Rolling frequency estimate from browser-delivered mousemove events.
         let rollingTimestamps = [];
         const ROLLING_WINDOW_SIZE = 12; // 12-event sliding window (~12ms at 1000Hz)
         let lastEventTimestamp = 0;
@@ -1222,7 +1430,7 @@
             }
         }
 
-        // Screen-Wide Mousemove Tracking with Hardware Rolling Window Frequency Engine
+        // Page-wide mousemove tracking with a rolling browser event window.
         window.addEventListener('mousemove', (e) => {
             const pollingTabActive = document.getElementById('tab-polling') && document.getElementById('tab-polling').classList.contains('active');
             if (!pollingTabActive) return;
@@ -1250,7 +1458,7 @@
             const now = e.timeStamp || performance.now();
             lastMoveActivityTime = performance.now();
 
-            // Track individual packet intervals for Jitter metric (Standard Deviation)
+            // Track browser event intervals for the variation metric.
             if (lastEventTimestamp > 0) {
                 const singleDelta = now - lastEventTimestamp;
                 if (singleDelta > 0.1 && singleDelta < 50) {
@@ -1271,25 +1479,21 @@
                 rollingTimestamps.shift();
             }
 
-            // Need at least 6 packets in the window to calculate smooth frequency
+            // Need at least 6 events in the window to calculate a stable estimate.
             if (rollingTimestamps.length >= 6) {
                 const timeSpan = rollingTimestamps[rollingTimestamps.length - 1] - rollingTimestamps[0];
                 const count = rollingTimestamps.length - 1;
 
-                // If mouse was paused (> 70ms between packets), reset window
+                // If mouse was paused (> 70ms between events), reset the window.
                 if (timeSpan > 70 * count) {
                     rollingTimestamps = [now];
                     return;
                 }
 
                 if (timeSpan >= 2.0) {
-                    let calculatedHz = Math.round((count / timeSpan) * 1000);
+                    const calculatedHz = Math.round((count / timeSpan) * 1000);
 
-                    // Sanity clamping based on active view ceiling (prevents graph ceiling flatlining)
-                    const maxScaleLimit = (hzScale === 1250) ? 1250 : ((hzScale === 2500) ? 2500 : ((hzScale === 4500) ? 4500 : 8500));
-                    calculatedHz = Math.min(calculatedHz, maxScaleLimit);
-
-                    // Update Peak Hz strictly from calculatedHz (100% consistent with graph)
+                    // The selected graph scale must not change the reported measurement.
                     if (calculatedHz > peakHz) {
                         peakHz = calculatedHz;
                     }
@@ -1402,12 +1606,16 @@
         const holdDropCountEl = document.getElementById('holdDropCount');
         const longestHoldEl = document.getElementById('longestHold');
 
-        let isHolding = false;
+        let holdActivePointer = null;
         let holdStartTime = 0;
         let holdTimerInterval = null;
         let holdDropCount = 0;
         let longestHoldSec = 0;
         let lastDrawPos = null;
+        let holdRounds = 0;
+        let holdArmed = false;
+        const holdTargetSeconds = 10;
+        const holdRequiredRounds = 3;
 
         function resizeHoldCanvas() {
             holdCanvas.width = holdCanvas.parentElement.clientWidth;
@@ -1418,31 +1626,69 @@
 
         holdCanvas.addEventListener('contextmenu', e => e.preventDefault());
 
-        holdCanvas.addEventListener('mousedown', (e) => {
-            isHolding = true;
-            holdStartTime = performance.now();
-            holdStateText.textContent = "HELD SOLID (SPRAYING)";
-            holdStateText.style.color = "#3fb950";
+        function startHoldTest() {
+            clearInterval(holdTimerInterval);
+            holdActivePointer = null;
+            holdRounds = 0;
+            holdDropCount = 0;
+            longestHoldSec = 0;
+            holdArmed = true;
+            holdDropCountEl.textContent = '0';
+            holdTimeVal.textContent = '0.00 s';
+            longestHoldEl.textContent = '0.00 s';
+            holdStateText.textContent = 'READY';
+            document.getElementById('holdButton').disabled = true;
+            document.getElementById('holdRoundStatus').textContent = 'Round 1 of 3: press and hold for 10 seconds.';
+        }
 
+        function finishHoldRound(success, cancelled = false) {
+            if (holdActivePointer === null) return;
+            const elapsed = (performance.now() - holdStartTime) / 1000;
+            clearInterval(holdTimerInterval);
+            holdActivePointer = null;
+            lastDrawPos = null;
+            longestHoldSec = Math.max(longestHoldSec, elapsed);
+            longestHoldEl.textContent = `${longestHoldSec.toFixed(2)} s`;
+            if (cancelled) {
+                holdStateText.textContent = 'INTERRUPTED';
+                document.getElementById('holdRoundStatus').textContent = `Round ${holdRounds + 1} interrupted by the browser. Try it again.`;
+                return;
+            }
+            holdRounds++;
+            if (!success) {
+                holdDropCount++;
+                holdDropCountEl.textContent = holdDropCount;
+            }
+            holdStateText.textContent = success ? 'ROUND COMPLETE' : 'EARLY RELEASE';
+            if (holdRounds === holdRequiredRounds) {
+                holdArmed = false;
+                document.getElementById('holdButton').disabled = false;
+                document.getElementById('holdRoundStatus').textContent = `${holdDropCount === 0 ? 'NO EARLY RELEASES OBSERVED' : 'INVESTIGATE'} — ${holdDropCount} early releases across 3 rounds.`;
+            } else {
+                document.getElementById('holdRoundStatus').textContent = `Round ${holdRounds + 1} of 3: press and hold for 10 seconds.`;
+            }
+        }
+
+        holdCanvas.addEventListener('pointerdown', e => {
+            if (!holdArmed || holdActivePointer !== null || e.pointerType !== 'mouse' ||
+                e.button !== Number(document.getElementById('holdButton').value)) return;
+            holdActivePointer = e.pointerId;
+            holdCanvas.setPointerCapture(e.pointerId);
+            holdStartTime = performance.now();
+            holdStateText.textContent = 'HOLDING';
             const rect = holdCanvas.getBoundingClientRect();
             lastDrawPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-
             holdTimerInterval = setInterval(() => {
                 const elapsed = (performance.now() - holdStartTime) / 1000;
                 holdTimeVal.textContent = `${elapsed.toFixed(2)} s`;
-                if (elapsed > longestHoldSec) {
-                    longestHoldSec = elapsed;
-                    longestHoldEl.textContent = `${longestHoldSec.toFixed(2)} s`;
-                }
+                if (elapsed >= holdTargetSeconds) finishHoldRound(true);
             }, 50);
         });
 
-        holdCanvas.addEventListener('mousemove', (e) => {
-            if (!isHolding || !lastDrawPos) return;
+        holdCanvas.addEventListener('pointermove', e => {
+            if (e.pointerId !== holdActivePointer || !lastDrawPos) return;
             const rect = holdCanvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-
+            const x = e.clientX - rect.left, y = e.clientY - rect.top;
             holdCtx.strokeStyle = '#3fb950';
             holdCtx.lineWidth = 3;
             holdCtx.lineCap = 'round';
@@ -1450,18 +1696,13 @@
             holdCtx.moveTo(lastDrawPos.x, lastDrawPos.y);
             holdCtx.lineTo(x, y);
             holdCtx.stroke();
-
             lastDrawPos = { x, y };
         });
-
-        window.addEventListener('mouseup', () => {
-            if (isHolding) {
-                isHolding = false;
-                clearInterval(holdTimerInterval);
-                holdStateText.textContent = "RELEASED";
-                holdStateText.style.color = "#58a6ff";
-                lastDrawPos = null;
-            }
+        holdCanvas.addEventListener('pointerup', e => {
+            if (e.pointerId === holdActivePointer) finishHoldRound((performance.now() - holdStartTime) / 1000 >= holdTargetSeconds);
+        });
+        holdCanvas.addEventListener('pointercancel', e => {
+            if (e.pointerId === holdActivePointer) finishHoldRound(false, true);
         });
 
         /* -------------------------------------------------------------
@@ -1479,27 +1720,44 @@
         let wheelUp = 0;
         let wheelDown = 0;
         let wheelGlitches = 0;
-        let lastScrollDirection = 0;
-        let lastScrollTime = 0;
+        let wheelRound = null;
+        let wheelGuided = { up: null, down: null };
+
+        function startWheelRound(direction) {
+            wheelRound = { direction, events: 0, unexpected: 0 };
+            wheelGuided[direction] = null;
+            document.getElementById('wheelRoundStatus').textContent = `Scroll ${direction} only: 0 / 30 wheel events.`;
+            wheelTitle.textContent = `SCROLL ${direction.toUpperCase()} ONLY`;
+        }
+
+        function wheelTestState() {
+            if (!wheelGuided.up || !wheelGuided.down) return 'UNTESTED';
+            return wheelGuided.up.unexpected + wheelGuided.down.unexpected > 0 ? 'INVESTIGATE' : 'NO UNEXPECTED DIRECTIONS OBSERVED';
+        }
 
         wheelArena.addEventListener('wheel', (e) => {
             e.preventDefault();
-            const now = performance.now();
+            if (e.deltaY === 0) return;
             wheelTotal++;
-            const currentDir = e.deltaY > 0 ? 1 : -1;
-            const timeSinceLast = now - lastScrollTime;
-
-            let isGlitch = false;
-            if (lastScrollDirection !== 0 && currentDir !== lastScrollDirection && timeSinceLast < 75) {
-                isGlitch = true;
-                wheelGlitches++;
+            const currentDir = e.deltaY > 0 ? 'down' : 'up';
+            const isGlitch = Boolean(wheelRound && currentDir !== wheelRound.direction);
+            if (wheelRound) {
+                wheelRound.events++;
+                if (isGlitch) wheelRound.unexpected++;
+                document.getElementById('wheelRoundStatus').textContent = `Scroll ${wheelRound.direction} only: ${wheelRound.events} / 30 wheel events.`;
+                if (wheelRound.events >= 30) {
+                    wheelGuided[wheelRound.direction] = { ...wheelRound };
+                    wheelRound = null;
+                    document.getElementById('wheelRoundStatus').textContent = wheelTestState() === 'UNTESTED' ?
+                        'One guided direction complete. Run the other direction.' : wheelTestState();
+                }
             }
+            wheelGlitches = (wheelGuided.up ? wheelGuided.up.unexpected : 0) +
+                (wheelGuided.down ? wheelGuided.down.unexpected : 0) +
+                (wheelRound ? wheelRound.unexpected : 0);
 
-            if (currentDir === 1) wheelDown++;
+            if (currentDir === 'down') wheelDown++;
             else wheelUp++;
-
-            lastScrollDirection = currentDir;
-            lastScrollTime = now;
 
             wheelTotalEl.textContent = wheelTotal;
             wheelUpCountEl.textContent = wheelUp;
@@ -1507,14 +1765,14 @@
             wheelGlitchCountEl.textContent = wheelGlitches;
             wheelGlitchCountEl.className = wheelGlitches > 0 ? 'stat-val fault' : 'stat-val healthy';
 
-            wheelTitle.textContent = isGlitch ? `⚠️ ENCODER REVERSE GLITCH!` : (currentDir === 1 ? 'SCROLL DOWN (TICK)' : 'SCROLL UP (TICK)');
-            wheelTitle.style.color = isGlitch ? '#f85149' : (currentDir === 1 ? '#58a6ff' : '#3fb950');
+            wheelTitle.textContent = isGlitch ? 'UNEXPECTED DIRECTION' : (currentDir === 'down' ? 'SCROLL DOWN' : 'SCROLL UP');
+            wheelTitle.style.color = isGlitch ? '#f85149' : (currentDir === 'down' ? '#58a6ff' : '#3fb950');
 
             const entry = document.createElement('div');
-            entry.className = `wheel-entry ${isGlitch ? 'wheel-glitch' : (currentDir === 1 ? 'wheel-down' : 'wheel-up')}`;
+            entry.className = `wheel-entry ${isGlitch ? 'wheel-glitch' : (currentDir === 'down' ? 'wheel-down' : 'wheel-up')}`;
             entry.innerHTML = `
-                <span>${currentDir === 1 ? '▼ Scroll Down' : '▲ Scroll Up'} (${Math.abs(e.deltaY).toFixed(0)})</span>
-                <span>${isGlitch ? '⚠️ REVERSE JUMP' : timeSinceLast < 1000 ? `${timeSinceLast.toFixed(1)}ms` : '0ms'}</span>
+                <span>${currentDir === 'down' ? '▼ Scroll Down' : '▲ Scroll Up'} (${Math.abs(e.deltaY).toFixed(0)})</span>
+                <span>${isGlitch ? 'Unexpected' : wheelRound ? 'Guided' : 'Observed'}</span>
             `;
             wheelLogContainer.prepend(entry);
             if (wheelLogContainer.children.length > 50) wheelLogContainer.lastChild.remove();
@@ -1525,6 +1783,8 @@
             wheelUp = 0;
             wheelDown = 0;
             wheelGlitches = 0;
+            wheelRound = null;
+            wheelGuided = { up: null, down: null };
             wheelTotalEl.textContent = '0';
             wheelUpCountEl.textContent = '0';
             wheelDownCountEl.textContent = '0';
@@ -1533,6 +1793,7 @@
             wheelLogContainer.innerHTML = '<div style="color: #8b949e; text-align: center; padding: 10px;">Scroll your wheel to inspect notch signals.</div>';
             wheelTitle.textContent = 'SCROLL WHEEL HERE';
             wheelTitle.style.color = '#f0f6fc';
+            document.getElementById('wheelRoundStatus').textContent = 'UNTESTED — run both guided directions for a result.';
         }
 
         /* -------------------------------------------------------------
@@ -1605,145 +1866,6 @@
         /* -------------------------------------------------------------
            TAB 6: REPORT CERTIFICATE GENERATOR & EXPORT LOGIC
         ------------------------------------------------------------- */
-        function updateReportSheet() {
-            const now = new Date();
-            document.getElementById('reportTimestamp').textContent = `Generated on: ${now.toLocaleDateString()} at ${now.toLocaleTimeString()}`;
-
-            // Switch telemetry
-            document.getElementById('repTotalClicks').textContent = totalClicks;
-            document.getElementById('repDoubleClicks').textContent = doubleClicks;
-            const health = totalClicks > 0 ? Math.max(0, Math.round(((totalClicks - doubleClicks) / totalClicks) * 100)) : 100;
-            document.getElementById('repHealthScore').textContent = `${health}%`;
-            document.getElementById('repBtnDist').textContent = `L:${counts.left} | R:${counts.right} | M:${counts.mid} | S:${counts.side}`;
-
-            if (doubleClicks === 0) {
-                document.getElementById('repSwitchVerdict').textContent = "PASS ✅";
-                document.getElementById('repSwitchVerdict').style.color = "#3fb950";
-            } else {
-                document.getElementById('repSwitchVerdict').textContent = `FAULT (${doubleClicks} double-clicks) ⚠️`;
-                document.getElementById('repSwitchVerdict').style.color = "#f85149";
-            }
-
-            // Hold stability
-            document.getElementById('repLongestHold').textContent = `${longestHoldSec.toFixed(2)} s`;
-            document.getElementById('repHoldDrops').textContent = holdDropCount;
-            document.getElementById('repTensionVerdict').textContent = holdDropCount === 0 ? "Solid (High Tension)" : "Unstable (Contact Loss)";
-
-            // Polling rate
-            document.getElementById('repPeakHz').textContent = `${peakHz} Hz`;
-            document.getElementById('repAvgHz').textContent = `${avgCalculatedHz} Hz`;
-            document.getElementById('repJitter').textContent = `${stdDevJitter.toFixed(2)} ms`;
-            document.getElementById('repDongleVerdict').textContent = peakHz >= 950 ? "Optimal (Esports 1000Hz)" : (peakHz > 0 ? "Normal" : "Untested");
-
-            // Wheel encoder
-            document.getElementById('repWheelTotal').textContent = wheelTotal;
-            document.getElementById('repWheelBalance').textContent = `${wheelUp} Up / ${wheelDown} Down`;
-            document.getElementById('repWheelGlitches').textContent = wheelGlitches;
-            const glitchRatio = wheelTotal > 0 ? (wheelGlitches / wheelTotal) : 0;
-            document.getElementById('repEncoderRating').textContent = glitchRatio < 0.08 ? "Healthy (Low Jitter)" : "Worn (Reverse Bouncing)";
-
-            // Calculate overall grade
-            const gradeBadge = document.getElementById('reportGradeBadge');
-            const summaryText = document.getElementById('reportSummaryText');
-
-            if (doubleClicks === 0 && holdDropCount === 0 && (peakHz >= 950 || peakHz === 0)) {
-                gradeBadge.textContent = "GRADE S+";
-                gradeBadge.className = "badge-grade";
-                summaryText.textContent = "Hardware telemetry confirms PRISTINE operating condition. Microswitch contacts exhibit zero double-click chatter, 100% spray hold integrity, and rock-solid USB reporting stability.";
-            } else if (doubleClicks === 0) {
-                gradeBadge.textContent = "GRADE A";
-                gradeBadge.className = "badge-grade";
-                summaryText.textContent = "Hardware operating within healthy gaming thresholds. Zero mechanical switch chatter detected. All primary actuation circuits passed inspection.";
-            } else {
-                gradeBadge.textContent = "GRADE C";
-                gradeBadge.className = "badge-grade fail";
-                summaryText.textContent = `Mechanical contact chatter detected (${doubleClicks} double-clicks). Increase firmware Key Debounce Delay to 8ms or perform the power-off rapid click cleaning trick.`;
-            }
-        }
-
-        // Print / PDF
-        function printReportPdf() {
-            updateReportSheet();
-            window.print();
-        }
-
-        // Download Text File
-        function downloadTextReport() {
-            updateReportSheet();
-            const now = new Date();
-            const reportText = `===============================================================
-       ESPORTS MOUSE PRO HARDWARE INSPECTION CERTIFICATE
-===============================================================
-Date & Time    : ${now.toLocaleDateString()} ${now.toLocaleTimeString()}
-Device Tested  : VXE R1 Pro (Nordic MCU / PixArt PAW3395)
-Firmware Filter: Active Hardware Debounce Lockout
-
----------------------------------------------------------------
-1. MICROSWITCH CONTACT CHATTER TELEMETRY
----------------------------------------------------------------
-Total Test Clicks       : ${totalClicks}
-Double-Click Faults     : ${doubleClicks} (<50ms threshold)
-Contact Health Score    : ${totalClicks > 0 ? Math.round(((totalClicks - doubleClicks) / totalClicks) * 100) : 100}%
-Button Actuations       : Left: ${counts.left} | Right: ${counts.right} | Mid: ${counts.mid} | Side: ${counts.side}
-Switch Verdict          : ${doubleClicks === 0 ? "PASSED (Clean Signal, Zero Double-Clicks)" : "FAULT (Contact Bounce Detected)"}
-
----------------------------------------------------------------
-2. SPRAY / HOLD STABILITY TELEMETRY
----------------------------------------------------------------
-Longest Continuous Hold : ${longestHoldSec.toFixed(2)} seconds
-Mid-Spray Disconnects   : ${holdDropCount}
-Contact Leaf Tension    : ${holdDropCount === 0 ? "Solid (Consistent Actuation)" : "Unstable (Contact Loss During Spray)"}
-
----------------------------------------------------------------
-3. 2.4GHz USB POLLING TELEMETRY
----------------------------------------------------------------
-Peak Polling Frequency  : ${peakHz} Hz
-Average Reporting Rate  : ${avgCalculatedHz} Hz
-Packet Jitter (StdDev)  : ${stdDevJitter.toFixed(2)} ms
-Wireless Receiver Status: ${peakHz >= 950 ? "Optimal (Esports Grade 1000Hz)" : "Normal"}
-
----------------------------------------------------------------
-4. MECHANICAL SCROLL ENCODER TELEMETRY
----------------------------------------------------------------
-Total Notches Rotated   : ${wheelTotal}
-Scroll Balance          : ${wheelUp} Up / ${wheelDown} Down
-Reverse Jitter Glitches : ${wheelGlitches}
-Encoder Status          : ${wheelGlitches < 5 ? "Pristine / Healthy" : "Directional Chatter Detected"}
-
-===============================================================
-OVERALL HARDWARE RATING: ${doubleClicks === 0 && holdDropCount === 0 ? "GRADE S+ (FLAWLESS ESPORTS READY)" : (doubleClicks === 0 ? "GRADE A (HEALTHY)" : "GRADE C (REQUIRES 8MS DEBOUNCE)")}
-===============================================================
-Generated by Esports Mouse Diagnostic Lab • 100% Offline Microsecond Engine
-`;
-
-            const blob = new Blob([reportText], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `VXE_R1_Pro_Diagnostic_Report_${now.toISOString().slice(0,10)}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            showToast("Text report downloaded!");
-        }
-
-        // Copy Clipboard
-        function copyReportClipboard() {
-            updateReportSheet();
-            const now = new Date();
-            const text = `🏆 **VXE R1 Pro Hardware Diagnostic Report** (${now.toLocaleDateString()})
-- **Switch Health:** ${totalClicks > 0 ? Math.round(((totalClicks - doubleClicks) / totalClicks) * 100) : 100}% (${doubleClicks} double-clicks across ${totalClicks} clicks)
-- **Spray Hold Stability:** ${longestHoldSec.toFixed(2)}s stable hold, 0 drops
-- **Peak USB Polling:** ${peakHz} Hz (Jitter: ${stdDevJitter.toFixed(2)} ms)
-- **Wheel Encoder:** ${wheelTotal} steps (${wheelGlitches} reverse glitches)
-- **Overall Rating:** ${doubleClicks === 0 && holdDropCount === 0 ? "GRADE S+ (Flawless / Esports Ready)" : "GRADE A (Healthy)"}`;
-
-            navigator.clipboard.writeText(text).then(() => {
-                showToast("Summary copied to clipboard!");
-            });
-        }
-
         function showToast(msg) {
             const toast = document.getElementById('toast');
             toast.textContent = msg;
@@ -1755,7 +1877,9 @@ Generated by Esports Mouse Diagnostic Lab • 100% Offline Microsecond Engine
         window.addEventListener('DOMContentLoaded', () => {
             resizePollCanvas();
             resizeHoldCanvas();
+            loadRepairResults();
         });
     </script>
+    <script src="report.js"></script>
 </body>
 </html>
