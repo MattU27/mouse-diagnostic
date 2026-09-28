@@ -1,6 +1,7 @@
 // All report formats use the same snapshot of completed browser observations.
 function getDiagnosticReport() {
-    const guided = repairSnapshots.after || repairSnapshots.before;
+    const guided = [repairSnapshots.before, repairSnapshots.after].filter(Boolean)
+        .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))[0] || null;
     const switchState = guided ? (guided.repeats ? 'INVESTIGATE' : 'NO REPEATS OBSERVED') : 'UNTESTED';
     const holdState = holdRounds === holdRequiredRounds ?
         (holdDropCount ? 'INVESTIGATE' : 'NO EARLY RELEASES OBSERVED') :
@@ -26,7 +27,8 @@ function updateReportSheet() {
     reportValue('reportTimestamp', `Generated on: ${new Date().toLocaleString()}`);
     reportValue('reportDevice', `Device: ${guided ? guided.mouse : 'not specified'}`);
     reportValue('repSwitchVerdict', report.switchState);
-    reportValue('repGuidedPhase', guided ? (guided === repairSnapshots.after ? 'After repair' : 'Before repair') : '—');
+    reportValue('repGuidedPhase', guided ?
+        `${guided === repairSnapshots.after ? 'After repair' : 'Before repair'} · ${new Date(guided.date).toLocaleDateString()}` : '—');
     reportValue('repTotalClicks', guided ? guided.count : 0);
     reportValue('repDoubleClicks', guided ? `${guided.repeats} (<${guided.threshold} ms)` : '—');
     reportValue('repBtnDist', guided ? repairButtonNames[guided.button] : '—');
@@ -74,6 +76,7 @@ Overall: ${report.overall} (${report.completed} of 4 modules recorded)
 
 GUIDED SWITCH TEST: ${report.switchState}
 Phase: ${guided ? (guided === repairSnapshots.after ? 'After repair' : 'Before repair') : '—'}
+Test completed: ${guided ? new Date(guided.date).toLocaleString() : '—'}
 Button: ${guided ? repairButtonNames[guided.button] : '—'}
 Presses: ${guided ? guided.count : '—'}
 Suspected rapid repeats: ${guided ? `${guided.repeats} below ${guided.threshold} ms` : '—'}
